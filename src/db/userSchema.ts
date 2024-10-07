@@ -1,14 +1,18 @@
 import {Mongoose , Schema , Model , connect, model} from 'mongoose';
 import { config } from 'dotenv';
+const mongoose = require('mongoose');
 config();
 
-export const connectionString:string = process.env.MONGODB_URI!;
+//Remmeber to setup database url in the .env file and also check the password for the user
+const connectionString:string = process.env.MONGODB_URI!;
 
+//Remove this in prod
+console.log("connection string is :",connectionString);
 //connecting to the database (type for the function can be better )
 async function connectDB():Promise<boolean>{
     try{
         console.log("Connection string for mongoDB is :",connectionString);
-        const connected = await connect(connectionString);
+        const connected = await connect(connectionString)
         return true;
     }
     catch(err){

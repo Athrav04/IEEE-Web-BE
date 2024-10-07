@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import cookieParser, { CookieParseOptions } from 'cookie-parser'
 import {} from 'cookie'
 import userRouter from './userRouter';
+import { authMiddleware } from './middleware/auth';
 
 const config = dotenv.config();
 const PORT = process.env.PORT!;
@@ -14,6 +15,7 @@ const app:Express = express();
 app.use(cookieParser());
 app.use(express.json());
 app.use(cors());
+app.use(authMiddleware)
 
 app.use('/',userRouter);
 
