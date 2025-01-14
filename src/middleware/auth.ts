@@ -15,8 +15,8 @@ export function authMiddleware(request:Request,response:Response,next:NextFuncti
         {
             const verified =  verify(auth_token,secret,);
             if(!verified){
+                response.status(401).end();
                 throw new Error("Inlvalid token");
-                response.status(401);
             }
             next();
         }
@@ -24,8 +24,6 @@ export function authMiddleware(request:Request,response:Response,next:NextFuncti
 
     }catch(error){
         console.log("Error while authenticating user", error)
-    }finally{
-        next()
     }
 
 }

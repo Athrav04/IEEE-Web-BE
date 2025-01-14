@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { startSession } from "mongoose";2
-import { userModel } from "./db/userSchema";
-import {hash , compare} from 'bcrypt'
+import { userModel } from "../db/userSchema";
+import {hash , compare ,} from 'bcrypt'
 import {sign,verify} from 'jsonwebtoken'
 
 const userRouter:Router = Router();
@@ -55,7 +55,6 @@ userRouter.post('/Register',async(request,response)=>{
             password:hashedUserPassword
         }).save({session:(await session)});
 
-        throw new Error("Example error");
 
         //add the first login time as the created at time instead of saving a separate field for it
         await newUser.updateOne({$push:{logs:new Date()}}).session((await session));
