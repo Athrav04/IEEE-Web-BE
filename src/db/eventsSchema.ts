@@ -7,4 +7,4 @@ const eventSchema = new Schema({
     event_description:{type:String,required:true}
 })
 
-export const eventModel = model('EventsModel',eventSchema);
+export  const eventModel = model('EventsModel',eventSchema);

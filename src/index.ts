@@ -5,7 +5,7 @@ import cookieParser, { CookieParseOptions } from 'cookie-parser'
 import {} from 'cookie'
 import userRouter from './Routers/userRouter';
 import { authMiddleware } from './middleware/auth';
-import oauthRouter from "./drive/oauth"
+import {oauthRouter} from "./drive/oauth"
 import eventsRouter from './Routers/eventsRouter';
 
 const config = dotenv.config();

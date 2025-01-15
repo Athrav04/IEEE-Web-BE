@@ -12,7 +12,7 @@ console.log("connection string is :",connectionString);
 async function connectDB():Promise<boolean>{
     try{
         console.log("Connection string for mongoDB is :",connectionString);
-        const connected = await connect(connectionString)
+        await connect(connectionString)
         return true;
     }
     catch(err){

@@ -1,9 +1,9 @@
 import {Router} from 'express';
 import { authMiddleware } from '../middleware/auth';
+import {eventModel} from '../db/eventsSchema';
 
 
 const eventsRouter:Router = Router();
-eventsRouter.use(authMiddleware);
 
 
 eventsRouter.get('/',(req,res)=>{
