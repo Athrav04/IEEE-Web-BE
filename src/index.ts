@@ -21,6 +21,8 @@ app.use(cors());
 // ################################## IMPORTANT ##################################
 // app.use(authMiddleware)
 
+// TODO: Remove all the useless and unecessary console logs before pushing to prod
+
 app.use('/',userRouter);
 app.use('/auth',oauthRouter);
 app.use('/events',eventsRouter);

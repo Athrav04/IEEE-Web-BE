@@ -4,7 +4,8 @@ import { GaxiosPromise } from 'googleapis/build/src/apis/abusiveexperiencereport
 import { Response, Router, response } from 'express';
 import { driveUserModel } from '../db/driveUserSchema';
 import {Credentials} from 'google-auth-library/build/src/auth/credentials'
-import {createFolder, findFolder} from './createFolder';
+import {createFolder, findFolder , createTestNested, listFilesInFolder, findFile, getReadAbleStream} from './createFolder';
+import { createPath, uploadCommittee } from './committee';
 
 export const oauthRouter = Router();
 
@@ -18,13 +19,15 @@ export const GlobalClient:Auth.OAuth2Client = new google.auth.OAuth2({
 type saveCredentialsOptions = {
   user_name?:string | undefined,
   user_email?:string | undefined,
-  access_token:string | undefined,
+  access_token:string | undefined | null,
   refresh_token?:string | undefined,
   token_expiry_date:Date | undefined
 }
 
 const SCOPES = ['https://www.googleapis.com/auth/drive',"https://www.googleapis.com/auth/cloud-platform.read-only"];
 
+
+//########################################### Check the dataBase for saved user credentials and set them if exists ###########################################
 async function loadSavedCredentialsIfExist():Promise<Credentials | null> {
   try {
     const driveUser = await driveUserModel.findOne({user_email:process.env.DRIVE_DEFAULT_EMAIL});
@@ -40,18 +43,25 @@ async function loadSavedCredentialsIfExist():Promise<Credentials | null> {
         throw new Error("Failed to revalidate token in loadSavedCredentialsIfExist");
       }
 
-     if( newToken.access_token ){
+     if( newToken.refresh_token ){
       await saveCredentials({user_email:driveUser.user_email,
         access_token:newToken.access_token!,
         refresh_token:driveUser.refresh_token!,
         token_expiry_date:new Date(newToken.expiry_date!)});
+      GlobalClient.setCredentials({access_token:newToken.access_token,refresh_token:driveUser.refresh_token});
       }
       else {
         saveCredentials({user_email:driveUser.user_email,
           access_token:newToken.access_token!,
           token_expiry_date:new Date(newToken.expiry_date!)});
+        GlobalClient.setCredentials({access_token:newToken.access_token});
+        console.log("new user credentials are :",GlobalClient.credentials);
+
       }
       
+    }
+    else {
+      GlobalClient.setCredentials({access_token:driveUser.access_token});
     }
     return {access_token:driveUser.access_token}
 
@@ -61,6 +71,8 @@ async function loadSavedCredentialsIfExist():Promise<Credentials | null> {
   }
 }
 
+
+//########################################### Save the user credentials to the database ###########################################
 async function saveCredentials(credentials: saveCredentialsOptions) {
   try {
     const driveUser = await driveUserModel.findOne({user_email:credentials.user_email});
@@ -76,13 +88,9 @@ async function saveCredentials(credentials: saveCredentialsOptions) {
       await newDriveUser.save();
     }
     else{
-      await driveUser.updateOne({
-        user_email:credentials.user_email
-      },
-      {
-        access_token:credentials.access_token,
-        token_expirty_date:credentials.token_expiry_date
-      });
+      driveUser.access_token = credentials.access_token!;
+      driveUser.refresh_token = credentials.refresh_token!;
+      driveUser.token_expirty_date = credentials.token_expiry_date!
       await driveUser.save();
       console.log("drive user updated : ",driveUser);
     }
@@ -92,13 +100,15 @@ async function saveCredentials(credentials: saveCredentialsOptions) {
   }
 }
 
-export async function authorize(): Promise<string | boolean>   {
-  let token = await loadSavedCredentialsIfExist();
 
-  //check if token exists and if yes then check if valid or not 
-  if (token && await checkTokenValidity(token.access_token!)) {
-    console.log("Token is valid inside authorize function");
-    GlobalClient.setCredentials(token);
+/*
+#### Authorize the user (if a user already exists load its credentails and return true)
+#### else generate a new authURL and return it to redirect user to consent screen
+#### if both no possible throw error (reutrn false is not reachable code for now , will change later)
+*/
+export async function authorize(): Promise<string | boolean>   {
+  const credentialsExist = await loadSavedCredentialsIfExist();
+  if(credentialsExist){
     return true;
   }
 
@@ -118,25 +128,9 @@ export async function authorize(): Promise<string | boolean>   {
   return false;
 }
 
-async function listFiles(authClient: Auth.OAuth2Client) {
-  const drive = google.drive({ version: 'v3', auth: authClient });
 
-  const res = await drive.files.list({
-    pageSize: 10,
-    fields: 'nextPageToken, files(id, name)',
-  });
-  const files = res.data.files;
-  if (!files || files.length === 0) {
-    console.log('No files found.');
-    return;
-  }
-  console.log('Files:');
-  files.map((file) => {
-    console.log(`${file.name} (${file.id})`);
-  });
-}
-
-
+// ############################### Given a access_token check if the access token is valid or not ###############################
+// HELPER FUNCTION
 async function checkTokenValidity(authToken:string):Promise<boolean>{
   try {
     const client =  google.oauth2('v2');
@@ -149,6 +143,9 @@ async function checkTokenValidity(authToken:string):Promise<boolean>{
   }
 }
 
+
+// ############################### Given a refresh token generate a new access_token for the user and return it ###############################
+// HELPER FUNCTION
 async function revalidateToken(refreshToken:string):Promise<Credentials | null>{
   try{
     GlobalClient.setCredentials({refresh_token:refreshToken});
@@ -167,6 +164,7 @@ async function revalidateToken(refreshToken:string):Promise<Credentials | null>{
   }
 }
 
+// HELPER FUNCTION TO GET USER SPECIFIC INFO (user email and user name for database storage)
 async function userInfo(authClient: Auth.OAuth2Client):Promise<Auth.gaxios.GaxiosResponse<drive_v3.Schema$About>| null>{
   try{
     const drive = google.drive({version:'v3',auth:authClient});
@@ -182,6 +180,11 @@ async function userInfo(authClient: Auth.OAuth2Client):Promise<Auth.gaxios.Gaxio
 }
 
 
+
+
+
+
+// ---------------------------------------------------------------- ROUTES ----------------------------------------------------------------
 oauthRouter.get('/login',(req,res)=>{
     authorize()
   .then((response:string | boolean) => {
@@ -228,32 +231,139 @@ console.log("user name is :",response?.data.user?.displayName," and user email a
 !response && console.log("No user info found");
 
   
- await listFiles(GlobalClient);
   res.status(200).send("Authorization Successful")
 
  }
  catch(err){
   console.log("some error occured in callback route: ",err);
-  res.status(500).send("some server error");
+  res.status(500).send("Internal server error , please check server logs for more information");
  }
 
 })
 
 oauthRouter.post("/createFolder",async(req,res)=>{
-  const resp = await createFolder("testFolder",GlobalClient);
+  const parentFolderName = req.query.parentFolder;
+  const newFolderName = req.query.newFolderName;
+  console.log("parentFolderName is :",parentFolderName , " and newFolderName is : ",newFolderName);
+ try {
+  await authorize();
+  if(parentFolderName){
+    const parentFolderId = await findFolder(parentFolderName as string,GlobalClient);
+    if(!parentFolderId){
+      console.log("falied to fetch parent id ");
+      res.send("Failed to fetch parent id").end();
+      throw new Error("failed to fetch parent id");
+    }
+    const response = await createTestNested(newFolderName as string,parentFolderId!,GlobalClient);
+    if(response){
+      console.log("nested folder created :",response);
+      res.status(200).send("Nested folder created");
+    }
+    else {
+      console.log("nested folder creation failed");
+      res.status(500).send("Nested folder creation failed");
+    }
+  }
+  else {
+    const resp = await createFolder(newFolderName as string,GlobalClient);
   if(resp){
     res.status(200).send("Folder created successfully");
   }
   else{
     res.status(500).send("Folder creation failed");
   }
+  }
+ }catch(err){console.log("Some error occured :",err);}
+  
+
 }
 );
 
 oauthRouter.get('/searchFolder',async(req,res)=>{
-  const resp = await findFolder("testFolder",GlobalClient);
-  res.send(resp);
+  const folderName = req.query.folderName;
+  if(!folderName){
+    console.log("No folerName found");
+    res.status(400).send("No folder name found please give a folder name")
+  }
+  await authorize();
+  
+  const resp = await findFolder(folderName as string,GlobalClient);
+  console.log(await listFilesInFolder(GlobalClient,resp!));
+  const fileIds = await listFilesInFolder(GlobalClient,resp!);
+  console.log(fileIds);
+  fileIds?.forEach(async(file)=>{
+   console.log( await listFilesInFolder(GlobalClient,file!));
+  })
+
+  res.send(fileIds);
 })
+
+oauthRouter.post('/updateFileData',async(req,res)=>{
+  const fileName = req.query.fileName;
+  const fileId = req.query.fileId;
+  console.log("fileId is :",fileId);
+  if(!fileId && !fileName){
+    res.status(400).send("No file id or name found");
+  }
+  await authorize();
+  const file = await findFile(GlobalClient,fileId as string,fileName as string);
+  if(!file){
+    res.status(400).send("No file found with given id");
+  }
+  else 
+  {
+    const drive = google.drive({version:'v3',auth:GlobalClient});
+    const response = await drive.files.update({
+      fileId:file,
+      requestBody:{
+        appProperties:{
+          uploaded:"false"
+        }
+      }
+    });
+    if(!response){res.status(500).send("Some internal server error please check server logs")}
+    res.send(response.data);
+  }
+})
+
+oauthRouter.post('/createS3Path',async(req,res)=>{
+  const pathName = req.query.pathName;
+  if(!pathName){
+    res.status(400).send("No path name found please provide a path name");
+  }
+  await authorize();
+  const response = await createPath(pathName as string);
+  if(!response){
+    console.log("failed to create path ")
+    res.status(500).send("Some internal server error please check server logs");
+  }
+  else{
+      console.log("path created successfully");
+      res.status(200).send("Path created successfully");
+  }
+});
+
+
+oauthRouter.get('/testRoute',async(req,res)=>{
+  await authorize();
+  const resp = await uploadCommittee(GlobalClient);
+  if(resp){
+    console.log("Committee images uploaded successfully");
+    res.status(200).send("Committee images uploaded successfully");
+  }
+  else{
+    console.log("Committee images upload failed");
+    res.status(500).send("Committee images upload failed");
+  }
+  // const fileid = await findFile(GlobalClient,undefined,'Pragati Patil.jpeg');
+  // const response = await getReadAbleStream(GlobalClient,fileid!);
+  // if(!response){
+  //   console.log("failed to get readable stream");
+  //   res.status(500).send("Some internal server error please check server logs");
+  // }
+  // else res.send(response);
+})
+
 
 module.exports = {
   oauthRouter,
