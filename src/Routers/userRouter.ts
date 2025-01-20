@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { startSession } from "mongoose";2
+import { startSession } from "mongoose";
 import { userModel } from "../db/userSchema";
 import {hash , compare ,} from 'bcrypt'
 import {sign,verify} from 'jsonwebtoken'
@@ -99,6 +99,8 @@ userRouter.post('/Login',async(request,response)=>{
                 const user_name:string = user.userName!;
                 const token = sign(user_name,jwt_secret);
                 console.log("cookie being set is :",token);
+
+                await (await user.save()).$session((await session));
 
                 //commit the transaction
                 (await session).commitTransaction();

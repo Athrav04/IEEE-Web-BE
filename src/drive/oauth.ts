@@ -5,7 +5,7 @@ import { Response, Router, response } from 'express';
 import { driveUserModel } from '../db/driveUserSchema';
 import {Credentials} from 'google-auth-library/build/src/auth/credentials'
 import {createFolder, findFolder , createTestNested, listFilesInFolder, findFile, getReadAbleStream} from './createFolder';
-import { createPath, uploadCommittee } from './committee';
+import { deleteObjectFromS3, getPreSignedUrl, uploadAllCommitteeImages } from '../helperFunctions/committeeData';
 
 export const oauthRouter = Router();
 
@@ -292,13 +292,13 @@ oauthRouter.get('/searchFolder',async(req,res)=>{
   const fileIds = await listFilesInFolder(GlobalClient,resp!);
   console.log(fileIds);
   fileIds?.forEach(async(file)=>{
-   console.log( await listFilesInFolder(GlobalClient,file!));
+   console.log( await listFilesInFolder(GlobalClient,file?.id!));
   })
 
   res.send(fileIds);
 })
 
-oauthRouter.post('/updateFileData',async(req,res)=>{
+oauthRouter.post('/setUnploaded',async(req,res)=>{
   const fileName = req.query.fileName;
   const fileId = req.query.fileId;
   console.log("fileId is :",fileId);
@@ -314,7 +314,7 @@ oauthRouter.post('/updateFileData',async(req,res)=>{
   {
     const drive = google.drive({version:'v3',auth:GlobalClient});
     const response = await drive.files.update({
-      fileId:file,
+      fileId:file.id!,
       requestBody:{
         appProperties:{
           uploaded:"false"
@@ -326,35 +326,37 @@ oauthRouter.post('/updateFileData',async(req,res)=>{
   }
 })
 
-oauthRouter.post('/createS3Path',async(req,res)=>{
-  const pathName = req.query.pathName;
-  if(!pathName){
-    res.status(400).send("No path name found please provide a path name");
-  }
-  await authorize();
-  const response = await createPath(pathName as string);
-  if(!response){
-    console.log("failed to create path ")
-    res.status(500).send("Some internal server error please check server logs");
-  }
-  else{
-      console.log("path created successfully");
-      res.status(200).send("Path created successfully");
-  }
-});
+// oauthRouter.post('/createS3Path',async(req,res)=>{
+//   const pathName = req.query.pathName;
+//   if(!pathName){
+//     res.status(400).send("No path name found please provide a path name");
+//   }
+//   await authorize();
+//   const response = await createPath(pathName as string);
+//   if(!response){
+//     console.log("failed to create path ")
+//     res.status(500).send("Some internal server error please check server logs");
+//   }
+//   else{
+//       console.log("path created successfully");
+//       res.status(200).send("Path created successfully");
+//   }
+// });
 
 
 oauthRouter.get('/testRoute',async(req,res)=>{
   await authorize();
-  const resp = await uploadCommittee(GlobalClient);
-  if(resp){
-    console.log("Committee images uploaded successfully");
-    res.status(200).send("Committee images uploaded successfully");
-  }
-  else{
-    console.log("Committee images upload failed");
-    res.status(500).send("Committee images upload failed");
-  }
+  // const resp = await getPreSignedUrl('committeeData/Pragati patil.jpeg');
+  // const resp = await uploadCommittee(GlobalClient);
+  // const resp = await deleteObjectFromS3('Core/Pragati patil.jpeg');
+  // if(resp){
+  //   console.log("Committee images uploaded successfully");
+  //   res.status(200).send("Committee images uploaded successfully");
+  // }
+  // else{
+  //   console.log("Committee images upload failed");
+  //   res.status(500).send("Committee images upload failed");
+  // }
   // const fileid = await findFile(GlobalClient,undefined,'Pragati Patil.jpeg');
   // const response = await getReadAbleStream(GlobalClient,fileid!);
   // if(!response){

@@ -7,6 +7,7 @@ import userRouter from './Routers/userRouter';
 import { authMiddleware } from './middleware/auth';
 import {oauthRouter} from "./drive/oauth"
 import eventsRouter from './Routers/eventsRouter';
+import dataRouter from './Routers/DataRouter';
 
 const config = dotenv.config();
 const PORT = process.env.PORT!;
@@ -25,7 +26,8 @@ app.use(cors());
 
 app.use('/',userRouter);
 app.use('/auth',oauthRouter);
-app.use('/events',eventsRouter);
+app.use('/eventData',eventsRouter);
+app.use('/teamData',dataRouter);
 
 app.get("/",(request,response) =>{
     response.send("hello")
