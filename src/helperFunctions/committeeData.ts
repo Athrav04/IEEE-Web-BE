@@ -6,7 +6,7 @@ import { getSignedUrl } from "@aws-sdk/cloudfront-signer";
 
 
 
-const s3client = new S3Client({region:'ap-south-1',credentials:{
+export const s3client = new S3Client({region:'ap-south-1',credentials:{
     accessKeyId:process.env.AWS_ACCESS_KEY!,
     secretAccessKey:process.env.AWS_SECRET!
 }});
@@ -80,6 +80,7 @@ export async function uploadCommitteImage(client:Auth.OAuth2Client,fileId:string
         return false;
     }
 }
+
 
 export async function deleteObjectFromS3(key:string):Promise<boolean>{
     try{

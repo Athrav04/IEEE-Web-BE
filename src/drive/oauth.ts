@@ -5,7 +5,8 @@ import { Response, Router, response } from 'express';
 import { driveUserModel } from '../db/driveUserSchema';
 import {Credentials} from 'google-auth-library/build/src/auth/credentials'
 import {createFolder, findFolder , createTestNested, listFilesInFolder, findFile, getReadAbleStream} from './createFolder';
-import { deleteObjectFromS3, getPreSignedUrl, uploadAllCommitteeImages } from '../helperFunctions/committeeData';
+import { deleteObjectFromS3, getPreSignedUrl, s3client, uploadAllCommitteeImages } from '../helperFunctions/committeeData';
+import { Upload } from '@aws-sdk/lib-storage';
 
 export const oauthRouter = Router();
 
@@ -28,7 +29,7 @@ const SCOPES = ['https://www.googleapis.com/auth/drive',"https://www.googleapis.
 
 
 //########################################### Check the dataBase for saved user credentials and set them if exists ###########################################
-async function loadSavedCredentialsIfExist():Promise<Credentials | null> {
+export async function loadSavedCredentialsIfExist():Promise<Credentials | null> {
   try {
     const driveUser = await driveUserModel.findOne({user_email:process.env.DRIVE_DEFAULT_EMAIL});
     if(!driveUser){
@@ -73,7 +74,7 @@ async function loadSavedCredentialsIfExist():Promise<Credentials | null> {
 
 
 //########################################### Save the user credentials to the database ###########################################
-async function saveCredentials(credentials: saveCredentialsOptions) {
+export async function saveCredentials(credentials: saveCredentialsOptions) {
   try {
     const driveUser = await driveUserModel.findOne({user_email:credentials.user_email});
     if(!driveUser){
@@ -131,7 +132,7 @@ export async function authorize(): Promise<string | boolean>   {
 
 // ############################### Given a access_token check if the access token is valid or not ###############################
 // HELPER FUNCTION
-async function checkTokenValidity(authToken:string):Promise<boolean>{
+export async function checkTokenValidity(authToken:string):Promise<boolean>{
   try {
     const client =  google.oauth2('v2');
     const isValid = await client.tokeninfo({access_token:authToken});
@@ -146,7 +147,7 @@ async function checkTokenValidity(authToken:string):Promise<boolean>{
 
 // ############################### Given a refresh token generate a new access_token for the user and return it ###############################
 // HELPER FUNCTION
-async function revalidateToken(refreshToken:string):Promise<Credentials | null>{
+export async function revalidateToken(refreshToken:string):Promise<Credentials | null>{
   try{
     GlobalClient.setCredentials({refresh_token:refreshToken});
     const newTokens = await GlobalClient.refreshAccessToken();
@@ -298,7 +299,7 @@ oauthRouter.get('/searchFolder',async(req,res)=>{
   res.send(fileIds);
 })
 
-oauthRouter.post('/setUnploaded',async(req,res)=>{
+oauthRouter.put('/setUploaded',async(req,res)=>{
   const fileName = req.query.fileName;
   const fileId = req.query.fileId;
   console.log("fileId is :",fileId);
@@ -308,10 +309,10 @@ oauthRouter.post('/setUnploaded',async(req,res)=>{
   await authorize();
   const file = await findFile(GlobalClient,fileId as string,fileName as string);
   if(!file){
-    res.status(400).send("No file found with given id");
+    console.log("no file found for id ");
+    res.status(400).send("No file found for updating ")
   }
-  else 
-  {
+  else {
     const drive = google.drive({version:'v3',auth:GlobalClient});
     const response = await drive.files.update({
       fileId:file.id!,
@@ -325,23 +326,6 @@ oauthRouter.post('/setUnploaded',async(req,res)=>{
     res.send(response.data);
   }
 })
-
-// oauthRouter.post('/createS3Path',async(req,res)=>{
-//   const pathName = req.query.pathName;
-//   if(!pathName){
-//     res.status(400).send("No path name found please provide a path name");
-//   }
-//   await authorize();
-//   const response = await createPath(pathName as string);
-//   if(!response){
-//     console.log("failed to create path ")
-//     res.status(500).send("Some internal server error please check server logs");
-//   }
-//   else{
-//       console.log("path created successfully");
-//       res.status(200).send("Path created successfully");
-//   }
-// });
 
 
 oauthRouter.get('/testRoute',async(req,res)=>{
@@ -364,6 +348,54 @@ oauthRouter.get('/testRoute',async(req,res)=>{
   //   res.status(500).send("Some internal server error please check server logs");
   // }
   // else res.send(response);
+})
+
+oauthRouter.post('/uploadEventFromDrive',async (req,res)=>{
+  try{
+      await authorize();
+      const eventFolder = await findFolder('EventData',GlobalClient);
+      if(!eventFolder){
+          res.status(400).send("No Event Folder Found");
+      }
+      console.log("Event Folder is :",eventFolder);
+
+      const folders = await listFilesInFolder(GlobalClient,eventFolder!);
+
+      console.log("All folders are :",folders);
+
+      folders?.forEach(async(folder)=>{
+          try{
+              const FOLDER_NAME = folder?.name;
+              console.log("Folder Name is :",FOLDER_NAME);
+              const files = await listFilesInFolder(GlobalClient,folder?.id!);
+              console.log("Files in folder are :",files);
+              if(!files){
+                  res.status(400).send("No files found in the folder");
+              }
+              files?.forEach(async(file)=>{
+                  const stream = await getReadAbleStream(GlobalClient,file?.id!);
+                  const upload = new Upload({
+                      client:s3client,
+                      params:{
+                          Bucket:'viitieeestb',
+                          Key:`eventsData/${FOLDER_NAME}/${file?.name}`,
+                          //@ts-ignore
+                          Body:stream,
+                          ContentType:'image/jpeg'
+                      }
+                  });
+                  await upload.done();
+                  console.log(`${file?.name} uploaded successfully`);
+              })
+          }catch(err){
+              console.log("Error while uploading event from drive ",err);
+              res.status(500).end("Internal server error  while uploading from nested folders");
+          }
+      })
+  }catch(err){
+      console.log("Error while uploading event from drive ",err);
+      res.status(500).end("Internal server error");
+  }
 })
 
 

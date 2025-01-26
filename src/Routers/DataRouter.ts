@@ -99,7 +99,7 @@ dataRouter.get("/getImage",async(req,res)=>{
     try{
         const url = await getPreSignedUrl(image as string);
         if(!url){
-            res.status(404).send("Hero Image not found");
+            res.status(404).send(`${image} not found`);
         }
         else res.status(200).send(url);
     }catch(err){
@@ -118,5 +118,19 @@ dataRouter.put('/updateAllUserData',async(req,res)=>{
         res.status(500).send("Internal server Error");
     }
 });
+
+
+dataRouter.get("/HeroImage",async(req,res)=>{
+    try{
+        const url = await getPreSignedUrl('HeroImage.jpeg');
+        if(!url){
+            res.status(404).send("Hero Image not found");
+        }
+        else res.status(200).send(url);
+    }catch(err){
+        console.log("An error occured while getting hero image :",err);
+        res.status(500).send("Internal server Error");
+    }
+})
 
 export default dataRouter;

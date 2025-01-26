@@ -13,7 +13,7 @@ export function authMiddleware(request:Request,response:Response,next:NextFuncti
         const auth_token:string = cookies.auth_token;   
         if(auth_token)  
         {
-            const verified =  verify(auth_token,secret,);
+            const verified =  verify(auth_token,secret);
             if(!verified){
                 response.status(401).end();
                 throw new Error("Inlvalid token");

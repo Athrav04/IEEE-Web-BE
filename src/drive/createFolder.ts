@@ -64,6 +64,46 @@ export async function findFile( client:Auth.OAuth2Client ,fileid?:string , fileN
     }
 }
 
+
+//Takes a file id and set's it to unploaded
+// To be used when any new file is uploaded to drive that is to be then uploaded to S3
+export async function setUnUploaded(client:Auth.OAuth2Client,fileId:string):Promise<boolean>{
+    try{
+        const drive = google.drive({version:'v3',auth:client});
+        const response = await drive.files.update({
+            fileId:fileId,
+            requestBody:{
+                appProperties:{
+                    uploaded:"false"
+                }
+            }
+        });
+        if(!response)console.log("some error while updating file ");throw new Error("some error ")
+        return true;
+
+    }catch(err){
+        console.log("Could not update user in drive ",err);
+        return false;
+    }
+}
+
+export async function setUploaded(client:Auth.OAuth2Client,fileId:string):Promise<boolean>{
+    try{
+        const drive = google.drive({version:'v3',auth:client});
+        const resp = await drive.files.update({
+            fileId:fileId,
+            requestBody:{
+                appProperties:{
+                    uploaded:"true"
+                }
+            }
+        });
+        !resp && console.log('Some error updating files in drive');return false;
+    }catch(err){
+        console.log("some error while setting uploaded to true",err);
+        return false;
+    }
+}
 /*
     This function get's all the files in the google drive that have not yet been uploaded S3
     Checks the appProperty uploaded=false and return those fileids 
